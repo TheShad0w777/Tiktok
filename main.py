@@ -1,53 +1,56 @@
-from flask import Flask, request
-import requests
+import uuid
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, InlineQueryResultArticle, InputTextMessageContent
+from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandler, InlineQueryHandler, ContextTypes
 
-app = Flask(__name__)
+BOT_TOKEN = "8913475001:AAE85LF0FO3glIi7tvuB2QtMq2hedvkAKfE"
 
-WA_TOKEN = "BURAYA_WA_TOKEN"
-PHONE_ID = "BURAYA_PHONE_ID"
+messages = {}
 
-@app.route("/webhook", methods=["GET"])
-def verify():
-    if request.args.get("hub.verify_token") == "mytoken123":
-        return request.args.get("hub.challenge")
-    return "Error", 403
+async def inline_query(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    query = update.inline_query.query
+    if not query:
+        return
+    
+    parts = query.split(" ", 1)
+    if len(parts) < 2:
+        return
+    
+    target = parts[0].replace("@", "")
+    text = parts[1]
+    msg_id = str(uuid.uuid4())
+    messages[msg_id] = {"text": text, "target": target}
+    
+    results = [
+        InlineQueryResultArticle(
+            id=msg_id,
+            title=f"@{target} üçün gizli mesaj",
+            input_message_content=InputTextMessageContent(f"🔒 @{target} üçün gizli mesaj var!"),
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton("Mesajı aç 🔓", callback_data=f"open_{msg_id}")
+            ]])
+        )
+    ]
+    await update.inline_query.answer(results, cache_time=0)
 
-@app.route("/webhook", methods=["POST"])
-def webhook():
-    data = request.json
-    try:
-        msg = data["entry"][0]["changes"][0]["value"]["messages"][0]
-        text = msg["text"]["body"]
-        phone = msg["from"]
-        
-        if "tiktok.com" not in text:
-            return "ok"
-        
-        send_message(phone, "⏳ Yüklənir...")
-        
-        r = requests.get(f"https://www.tikwm.com/api/?url={text}")
-        video_url = r.json()["data"]["play"]
-        
-        send_video(phone, video_url)
-    except:
-        pass
-    return "ok"
+async def button(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    msg_id = query.data.replace("open_", "")
+    
+    if msg_id not in messages:
+        await query.answer("Mesaj tapılmadı!", show_alert=True)
+        return
+    
+    msg = messages[msg_id]
+    username = query.from_user.username or ""
+    
+    if username.lower() != msg["target"].lower():
+        await query.answer("Bu mesaj sən üçün deyil! 🚫", show_alert=True)
+        return
+    
+    await query.answer(msg["text"], show_alert=True)
 
-def send_message(phone, text):
-    requests.post(
-        f"https://graph.facebook.com/v18.0/{PHONE_ID}/messages",
-        headers={"Authorization": f"Bearer {WA_TOKEN}"},
-        json={"messaging_product": "whatsapp", "to": phone,
-              "type": "text", "text": {"body": text}}
-    )
-
-def send_video(phone, url):
-    requests.post(
-        f"https://graph.facebook.com/v18.0/{PHONE_ID}/messages",
-        headers={"Authorization": f"Bearer {WA_TOKEN}"},
-        json={"messaging_product": "whatsapp", "to": phone,
-              "type": "video", "video": {"link": url}}
-    )
-
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=8080)
+app = ApplicationBuilder().token(BOT_TOKEN).build()
+app.add_handler(InlineQueryHandler(inline_query))
+app.add_handler(CallbackQueryHandler(button))
+print("Psst bot işləyir...")
+app.run_polling()
