@@ -1,8 +1,9 @@
 import uuid
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, InlineQueryResultArticle, InputTextMessageContent
-from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandler, InlineQueryHandler, ContextTypes
+from telegram.ext import ApplicationBuilder, CallbackQueryHandler, InlineQueryHandler, ContextTypes
 
 BOT_TOKEN = "8913475001:AAE85LF0FO3glIi7tvuB2QtMq2hedvkAKfE"
+WEBHOOK_URL = "https://tiktok-production-69c9.up.railway.app"
 
 messages = {}
 
@@ -52,5 +53,9 @@ async def button(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 app = ApplicationBuilder().token(BOT_TOKEN).build()
 app.add_handler(InlineQueryHandler(inline_query))
 app.add_handler(CallbackQueryHandler(button))
-print("Psst bot işləyir...")
-app.run_polling()
+
+app.run_webhook(
+    listen="0.0.0.0",
+    port=8080,
+    webhook_url=f"{WEBHOOK_URL}/{BOT_TOKEN}"
+)
